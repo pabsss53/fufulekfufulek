@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather WebGIS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+  />
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+
+  <header class="p-4 bg-blue-700 text-center text-2xl font-bold">
+    SELALU MENERTAWAKAN RAMALAN CUACA, KARTU TAROT ORANG PINTAR MEMBACA NASIB
+  </header>
+
+  <main class="flex-grow p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- Map -->
+    <div id="map" class="col-span-1 md:col-span-2 h-[500px] rounded-lg shadow-lg"></div>
+
+    <!-- Weather Data Cards -->
+    <div id="weather-cards" class="col-span-1 md:col-span-2 grid grid-cols-1 gap-4">
+      <p class="text-gray-400">Memuat data cuaca...</p>
+    </div>
+  </main>
+
+  <footer class="p-4 text-center bg-blue-700 text-sm">
+    &copy; 2025 - WebGIS by ADAM DAMAR
+  </footer>
+
+  <script>
+    const API_KEY = "be1a1de5129b136b945b3d12738f8eb3";
+
+    const locations = [
+      { name: "Kahyangan", lat: -7.263372, lon: 109.927987 },
+      { name: "Panama", lat: -7.265159, lon: 109.935054 },
+      { name: "Tawangsari", lat: -7.38792, lon: 109.89481 },
+      { name: "Temanggung", lat: -7.31804, lon: 110.18305 },
+    ];
+
+    const map = L.map("map").setView([-7.5, 110], 9);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+    }).addTo(map);
+
+    const weatherCardsContainer = document.getElementById("weather-cards");
+
+    async function getWeatherData(lat, lon, name) {
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        return {
+          name,
+          temp: data.main.temp,
+          humidity: data.main.humidity,
+          wind: data.wind.speed,
+          desc: data.weather[0].description,
+          icon: data.weather[0].icon,
+          rain: data.rain ? data.rain["1h"] || 0 : 0
+        };
+      } catch (error) {
+        console.error(`Gagal mengambil data cuaca untuk ${name}:`, error);
+        return {
+          name,
+          temp: "-", humidity: "-", wind: "-", desc: "Tidak tersedia", icon: "01d", rain: "-"
+        };
+      }
+    }
+
+    async function getForecast(lat, lon) {
+      const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`;
+      const res = await fetch(url);
+      const data = await res.json();
+      return data.list.slice(0, 4).map(item => ({
+        time: new Date(item.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        temp: item.main.temp,
+        desc: item.weather[0].description,
+        icon: item.weather[0].icon
+      }));
+    }
+
+    async function loadWeather() {
+      weatherCardsContainer.innerHTML = "";
+
+      for (const loc of locations) {
+        const current = await getWeatherData(loc.lat, loc.lon, loc.name);
+        const forecast = await getForecast(loc.lat, loc.lon);
+
+        const forecastHtml = forecast.map(f => `
+          <div class="flex items-center space-x-2">
+            <img src="https://openweathermap.org/img/wn/${f.icon}.png" />
+            <span>${f.time} - ${f.temp}°C, ${f.desc}</span>
+          </div>
+        `).join("");
+
+        const popupContent = `
+          <b>${current.name}</b><br>
+          Sekarang: ${current.temp}°C, ${current.desc}<br>
+          <hr><b>Prediksi 12 jam ke depan:</b><br>
+          ${forecastHtml}
+        `;
+
+        L.marker([loc.lat, loc.lon])
+          .addTo(map)
+          .bindPopup(popupContent);
+
+        weatherCardsContainer.innerHTML += `
+          <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+            <div class="flex items-center space-x-4">
+              <img src="https://openweathermap.org/img/wn/${current.icon}@2x.png" alt="${current.desc}">
+              <div>
+                <h2 class="text-xl font-semibold">${current.name}</h2>
+                <p class="text-sm capitalize">${current.desc}</p>
+              </div>
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
+              <div><strong>Suhu:</strong> ${current.temp}°C</div>
+              <div><strong>Angin:</strong> ${current.wind} m/s</div>
+              <div><strong>Kelembapan:</strong> ${current.humidity}%</div>
+              <div><strong>Presipitasi:</strong> ${current.rain} mm</div>
+            </div>
+            <hr class="my-2 border-gray-700">
+            <div class="text-sm font-semibold mb-1">Prediksi 12 jam ke depan:</div>
+            ${forecastHtml}
+          </div>
+        `;
+      }
+    }
+
+    loadWeather();
+  </script>
+</body>
+</html>
